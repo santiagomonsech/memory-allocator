@@ -1,0 +1,9 @@
+# Build artifacts
+src/*.o
+tests/test
+
+# AI / tutor (private)
+.claude/
+CLAUDE.md
+CONTEXT.md
+notes/
