@@ -7,10 +7,16 @@
 #include <stdint.h>
 
 const size_t PADDING_ALIGNMENT = 7;
+size_t * start_of_heap;
 
 static inline size_t _get_block_size(size_t raw_size) { 
     size_t raw_block_size = raw_size + 2*sizeof(size_t);
-    return (raw_block_size + PADDING_ALIGNMENT) & ~ PADDING_ALIGNMENT;
+    size_t block_size = (raw_block_size + PADDING_ALIGNMENT) & ~ PADDING_ALIGNMENT;
+    //avoid heap buffer overflow.
+    if(block_size < raw_size){
+        return 0;
+    }
+    return block_size;
 }
 
 static inline size_t _pack(size_t block_size, uint8_t alloc) { return block_size | alloc;}
@@ -26,13 +32,48 @@ static inline void _set(size_t * ptr, size_t header) {
     return;
 }
 
+static inline size_t * _start_of_next_block(size_t * ptr, size_t * bottom_heap){
+    if(ptr == bottom_heap){
+        return ptr;
+    }
+    size_t block_size = _get_size(*ptr);
+    return ptr + (block_size/sizeof(size_t));
+}
+
+//if newly requested block is smaller than original, then split both blocks, else use the orginal block.
+static inline void _compact_block(size_t * header, size_t block_size, size_t * bottom_heap){
+    size_t original_block = _get_size(*header);
+    size_t remaining_size = original_block - block_size;
+    if(remaining_size > 2*sizeof(size_t)){
+        _set(header, _pack(block_size, 1));
+        size_t * next_header = _start_of_next_block(header, bottom_heap);
+        _set(next_header, _pack(remaining_size, 0));
+        return;
+    }
+    _set(header, _pack(original_block, 1));
+}
+
+static size_t * _first_fit(size_t block_size){
+    size_t * bottom_heap = (size_t *)sbrk(0);
+    if(start_of_heap == 0){
+        start_of_heap = bottom_heap;
+    }
+    for(size_t * ptr = start_of_heap; ptr < bottom_heap; ptr = _start_of_next_block(ptr, bottom_heap)){
+        if(!_get_alloc(*ptr) && _get_size(*ptr) >= block_size){
+            _compact_block(ptr, block_size, bottom_heap);
+            return ptr;
+        }
+    }
+    return sbrk(block_size);
+}
+
 void *ma_malloc(size_t size)
 {
-    if(size == 0){
+    size_t block_size = _get_block_size(size);
+    if(block_size == 0 || size == 0){
         return NULL;
     }
-    size_t block_size = _get_block_size(size);
-    size_t * ptr = sbrk(block_size);
+    size_t * ptr = _first_fit(block_size);
     if(ptr == (void *)-1){
         return NULL;
     }

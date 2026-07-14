@@ -26,3 +26,12 @@
 - Included boundary tags in memory (header-footer), no reuse of freed blocks yet (always grows via sbrk)
 - malloc and free are functional
 - basic test cases passing
+
+## [2026-07-13] - M2 Starting
+
+- Working on first-fit approach, missing coalesing the block if a first fit match is found but its size is smaller then the original block (producing seg fault)
+- Added function to traverse heap blocks.
+
+## [2026-07-14] - M2
+- Fixed case when first-fit matches with a smaller block size and compacting the bigger one.
+- Included check for heap buffer overflow.
