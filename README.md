@@ -66,7 +66,7 @@ This is to prevent CPU performance penalties and satisfy the hardware constraint
 | Milestone | Description | Status |
 |-----------|-------------|--------|
 | M1 | Boundary tags · `ma_malloc` via `sbrk` · `ma_free` (no coalescing) | ✅ Done |
-| M2 | Coalescing (all 4 cases) · first-fit search · block splitting | 🔄 In Progress |
+| M2 | Coalescing (all 4 cases) · first-fit search · block splitting | ✅ Done |
 | M3 | Explicit free list — prev/next pointers in payload | ⬜ Planned |
 | M4 | Segregated free lists — multiple lists by size class | ⬜ Planned |
 | M5 | Benchmark vs libc malloc — throughput + fragmentation | ⬜ Planned |
