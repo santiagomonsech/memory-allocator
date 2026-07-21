@@ -3,9 +3,7 @@
 ---
 
 ## [Unreleased]
-- M2 first-fit search, coalescing when freeing.
-
-### In progress
+- `ma_realloc` and `ma_calloc` not implemented yet (return `NULL`).
 
 ---
 
@@ -26,3 +24,16 @@
 - Included boundary tags in memory (header-footer), no reuse of freed blocks yet (always grows via sbrk)
 - malloc and free are functional
 - basic test cases passing
+
+## [2026-07-13] - M2 Starting
+
+- Working on first-fit approach, missing coalesing the block if a first fit match is found but its size is smaller then the original block (producing seg fault)
+- Added function to traverse heap blocks.
+
+## [2026-07-14] - M2 (Partial)
+- Fixed case when first-fit matches with a smaller block size and compacting the bigger one.
+- Included check for heap buffer overflow.
+
+## [2026-07-21] - M2 Completed
+- Coalescing with neighbouring blocks on free — all 4 cases (no free neighbors, only previous, only next, both), using boundary tags to find the previous block in O(1).
+- Explicit tests per coalescing case, asserting the merged block's address is reused (not just absence of crash/leak).
