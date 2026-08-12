@@ -59,6 +59,9 @@ Because when trying to get the start of the previous block, from the start of th
 **Why 8-byte alignment?**
 This is to prevent CPU performance penalties and satisfy the hardware constraints of 64-bit systems. By ensuring every free memory chunk begins at an address divisible by 8, a custom malloc or free implementation guarantees that any primitive data type stored there can be accessed efficiently.
 
+**Why first-fit instead of best-fit?**
+Mainly simplicity of implementation — first-fit stops searching as soon as it finds a candidate block, while best-fit needs to traverse the entire free list to guarantee the tightest fit. Per CS:APP 9.9.6, first-fit tends to have throughput comparable to best-fit in practice, despite best-fit giving better worst-case external fragmentation guarantees. I haven't measured that trade-off for this allocator yet — that's exactly what M5 (benchmark vs libc malloc, throughput + fragmentation) is for, instead of assuming it.
+
 ---
 
 ## Current status
@@ -70,6 +73,25 @@ This is to prevent CPU performance penalties and satisfy the hardware constraint
 | M3 | Explicit free list — prev/next pointers in payload | ⬜ Planned |
 | M4 | Segregated free lists — multiple lists by size class | ⬜ Planned |
 | M5 | Benchmark vs libc malloc — throughput + fragmentation | ⬜ Planned |
+
+---
+
+## Testing
+
+Beyond "does it crash" — the coalescing tests assert **address reuse**, not just absence of a crash:
+
+- **Merge with next**: after freeing a block and coalescing with the following one, `ma_malloc` for a block that fits returns the *same* address the freed block had — the merge extends forward, the start of the block never moves.
+- **Merge with previous / both neighbors**: the resulting address is *earlier* than the just-freed block's — the merge absorbs the earlier neighbor, so the block that "wins" starts where the previous block used to.
+
+Tests use allocated "wall" blocks that are never freed to isolate each coalescing scenario from leftover free blocks contaminating the next test.
+
+The whole suite runs clean under `make asan` (AddressSanitizer) and `make valgrind`.
+
+A code review on the M2 implementation caught 3 real bugs before merge:
+
+- **Integer overflow in `_get_block_size`** — fixed with a sentinel that returns 0 when `block_size < raw_size` (overflow detected), consumed by `ma_malloc`.
+- **Redundant `sbrk(0)` per loop iteration** in `_first_fit` / `_start_of_next_block` — fixed by caching `bottom_heap` once and passing it as a parameter instead of querying the OS on every iteration.
+- **Test coverage gap** — no test asserted that a freed block actually got reused; only that nothing crashed.
 
 ---
 
