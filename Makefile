@@ -23,7 +23,8 @@ asan: clean $(TEST)
 test: $(TEST)
 	./$(TEST)
 
-valgrind: $(TEST)
+valgrind: clean $(TEST)
+	$(TEST)
 	valgrind --leak-check=full --show-leak-kinds=all ./$(TEST)
 
 clean:
