@@ -21,6 +21,7 @@
 - `ma_malloc` didn't check for a `NULL` return from `_first_fit` before computing `ptr + 1`, would silently turn a legitimate allocation failure into a garbage non-NULL pointer instead of `NULL`.
 
 ### Changed
+  - Free-list insertion ended up **address-ordered** instead of the LIFO planned on 09-01: `free` is O(n) in the number of free blocks instead of O(1), in exchange for better memory utilization (first-fit on an address-ordered list approaches best-fit, CS:APP 9.9.13). LIFO vs. address-ordered comparison deferred to M5's benchmark.
 - Removed dead code: the old implicit-free-list `_first_fit`/`_compact_block` (superseded by the explicit-list versions) and leftover debug `printf`s.
 - `valgrind` Makefile target now depends on `clean`, matching `asan` — running `make valgrind` right after `make asan` was reusing the ASan-instrumented binary, causing a runtime conflict.
 
@@ -35,8 +36,7 @@ Verified with `make test` + `make asan` + `make valgrind`, all green (0 errors, 
 ## [2026-09-01] — M3: Design (Explicit Free Lists)
 - Static sentinel nodes `HEAD`/`TAIL`, kept outside the `sbrk`-managed heap — they never participate in physical coalescing, so they don't need a header/footer.
 - Minimum block size raised to `4 * sizeof(size_t)` (header + footer + prev + next pointers).
-- LIFO insertion policy chosen for M3. comparison against address-ordered insertion deferred to M5's benchmark.
-
+- Free-list insertion is **address-ordered**,comparison against LIFO-ordered insertion deferred to M5's benchmark.
 ---
 
 ## [2026-06-12] — M1: First approach
