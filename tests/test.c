@@ -49,7 +49,63 @@ static void test_coalesce_both(void) {
     ma_free(w);
 }
 
+static void test_list_first_block(void) {
+    printf("\n=== test_list_first_block (B is the first block, C free) ===\n");
+
+    void *b = ma_malloc(32);
+    assert(b != NULL);
+    void *c = ma_malloc(32);
+    assert(c != NULL);
+    void *wall = ma_malloc(32);
+    assert(wall != NULL);
+
+    long before = ma_free_list_len();
+    assert(before >= 0);
+
+    ma_free(c);
+    ma_free(b);
+
+    assert(ma_free_list_len() == before + 1 && "first block: c must leave the list");
+    printf("[PASS] first block: one node, consistent both ways\n");
+
+    void *again = ma_malloc(80);
+    assert(again == b && "the merged block should be reused whole");
+    assert(ma_free_list_len() == before);
+}
+
+static void test_list_case(const char *name, size_t size, int free_a, int free_c) {
+    printf("\n=== test_list_case: %s ===\n", name);
+
+    void *wall = ma_malloc(size);
+    assert(wall != NULL);
+    void *a = ma_malloc(size);
+    assert(a != NULL);
+    void *b = ma_malloc(size);
+    assert(b != NULL);
+    void *c = ma_malloc(size);
+    assert(c != NULL);
+    void *wall2 = ma_malloc(size);
+    assert(wall2 != NULL);
+
+    // guard: the case only means something if a, b, c are neighbors in the heap
+    assert((char *)b - (char *)a > 0 && (char *)b - (char *)a == (char *)c - (char *)b);
+
+    long before = ma_free_list_len();
+    assert(before >= 0);
+
+    if (free_a)
+        ma_free(a);
+    if (free_c)
+        ma_free(c);
+    ma_free(b);
+
+    assert(ma_free_list_len() == before + 1 && "coalescing must leave exactly one new node");
+    printf("[PASS] %s: one node, consistent both ways\n", name);
+}
+
 int main(void) {
+    test_list_first_block();
+
     printf("=== ma_malloc tests ===\n");
 
     void *p = ma_malloc(64);
@@ -93,6 +149,11 @@ int main(void) {
 
     test_coalesce_next();
     test_coalesce_both();
+
+    test_list_case("A alloc, C alloc", 4096, 0, 0);
+    test_list_case("A free, C alloc", 16384, 1, 0);
+    test_list_case("A alloc, C free", 65536, 0, 1);
+    test_list_case("A free, C free", 262144, 1, 1);
 
     printf("\nAll tests passed!\n");
     return 0;

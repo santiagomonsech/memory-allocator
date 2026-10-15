@@ -83,17 +83,22 @@ static inline void _set_prev(size_t *ptr, size_t *prev)
     *(ptr + PREV_OFFSET) = (size_t)prev;
 }
 
+static void _unlink_from_list(size_t *block)
+{
+    _set_next(_prev(block), _next(block));
+    _set_prev(_next(block), _prev(block));
+}
+
 static inline void _compact_block(size_t *header, size_t block_size)
 {
     size_t original_block = _get_size(*header);
     size_t remaining_size = original_block - block_size;
-
-    size_t *previous_free_block = _prev(header);
-    size_t *next_free_block = _next(header);
     if (remaining_size >= MIN_BLOCK_SIZE)
     {
-        _set(header, _pack(block_size, 1));
+        size_t *previous_free_block = _prev(header);
+        size_t *next_free_block = _next(header);
         size_t *new_free_block = header + (block_size / sizeof(size_t));
+        _set(header, _pack(block_size, 1));
         _set(new_free_block, _pack(remaining_size, 0));
         _set_next(new_free_block, _next(header));
         _set_prev(new_free_block, _prev(header));
@@ -103,8 +108,7 @@ static inline void _compact_block(size_t *header, size_t block_size)
     else
     {
         _set(header, _pack(original_block, 1));
-        _set_next(previous_free_block, next_free_block);
-        _set_prev(next_free_block, previous_free_block);
+        _unlink_from_list(header);
     }
 }
 
@@ -205,6 +209,7 @@ static void _coalesce_block(size_t *ptr)
     if (next_block != bottom_of_heap && !_get_alloc(*next_block))
     {
         block_size += _get_size(*next_block);
+        _unlink_from_list(next_block);
     }
     _set(start_header, _pack(block_size, 0));
     _update_explicit_list(start_header);
@@ -245,4 +250,54 @@ void *ma_calloc(size_t nmemb, size_t size)
     (void)nmemb;
     (void)size;
     return NULL;
+}
+
+#define MAX_WALK 1000
+
+void ma_print_free_list(void)
+{
+    printf("forward : HEAD");
+    size_t n = 0;
+    for (size_t *p = _next(HEAD); p != TAIL; p = _next(p))
+    {
+        if (p == NULL || ++n > MAX_WALK)
+        {
+            printf(" -> !! broken/cycle");
+            break;
+        }
+        printf(" -> %p[%zu%s]", (void *)p, _get_size(*p), _get_alloc(*p) ? ",A" : "");
+    }
+    printf(" -> TAIL\n");
+
+    printf("backward: TAIL");
+    n = 0;
+    for (size_t *p = _prev(TAIL); p != HEAD; p = _prev(p))
+    {
+        if (p == NULL || ++n > MAX_WALK)
+        {
+            printf(" -> !! broken/cycle");
+            break;
+        }
+        printf(" -> %p[%zu]", (void *)p, _get_size(*p));
+    }
+    printf(" -> HEAD\n");
+}
+
+long ma_free_list_len(void)
+{
+    long forward = 0;
+    for (size_t *p = _next(HEAD); p != TAIL; p = _next(p))
+    {
+        if (p == NULL || ++forward > MAX_WALK || _get_alloc(*p) || _prev(_next(p)) != p)
+            return -1;
+    }
+
+    long backward = 0;
+    for (size_t *p = _prev(TAIL); p != HEAD; p = _prev(p))
+    {
+        if (p == NULL || ++backward > MAX_WALK)
+            return -1;
+    }
+
+    return forward == backward ? forward : -1;
 }
