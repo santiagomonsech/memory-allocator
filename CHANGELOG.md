@@ -7,33 +7,18 @@
 
 ---
 
-## [2026-06-12] — M1: First approach
+  ## [0.3.0] - 2026-10-14
+  ### Added
+  - (explicit free list: sentinels, prev/next in the payload, minimum block size)
+  ### Changed
+  - (first-fit now walks the free list instead of the whole heap; address-ordered insertion and its O(n) free cost)
 
-### Added
-- `ma_malloc(size)`: computes aligned block size, calls `sbrk`, does not set the header nor return the allocated memory starting pointer.
-- `ma_free`: still empty
-- Inline helpers defined (not yet integrated): `_get_block_size`, `_pack`, `_get_size`, `_get_alloc`, `set`
+  ## [0.2.0] - 2026-07-21
+  ### Added
+  - (first-fit, splitting, coalescing of the 4 cases)
+  ### Fixed
+  - (only if a 0.1.0 bug was fixed here)
 
-### Design decisions
-- Header and footer store `block_size | alloc_bit` packed into a single `size_t`
-- Footer duplicates header to enable O(1) backward traversal during coalescing
-- `sbrk` used instead of `mmap` — simpler for learning, grows heap linearly
-
-## [2026-07-08] — M1
-
-- Included boundary tags in memory (header-footer), no reuse of freed blocks yet (always grows via sbrk)
-- malloc and free are functional
-- basic test cases passing
-
-## [2026-07-13] - M2 Starting
-
-- Working on first-fit approach, missing coalesing the block if a first fit match is found but its size is smaller then the original block (producing seg fault)
-- Added function to traverse heap blocks.
-
-## [2026-07-14] - M2 (Partial)
-- Fixed case when first-fit matches with a smaller block size and compacting the bigger one.
-- Included check for heap buffer overflow.
-
-## [2026-07-21] - M2 Completed
-- Coalescing with neighbouring blocks on free — all 4 cases (no free neighbors, only previous, only next, both), using boundary tags to find the previous block in O(1).
-- Explicit tests per coalescing case, asserting the merged block's address is reused (not just absence of crash/leak).
+  ## [0.1.0] - 2026-07-08
+  ### Added
+  - (boundary tags, ma_malloc via sbrk, ma_free without coalescing)

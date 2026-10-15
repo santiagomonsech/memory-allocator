@@ -7,7 +7,14 @@
 #include <stdint.h>
 
 const size_t PADDING_ALIGNMENT = 7;
+const size_t PREV_OFFSET = 1;
+const size_t NEXT_OFFSET = 2;
+const size_t MIN_BLOCK_SIZE = 4 * sizeof(size_t);
+
 size_t *start_of_heap;
+
+static size_t HEAD[3];
+static size_t TAIL[3];
 
 static inline size_t _get_block_size(size_t raw_size)
 {
@@ -41,7 +48,7 @@ static inline size_t *_start_of_previous_block(size_t *ptr)
     {
         return ptr;
     }
-    size_t * previous_footer = (size_t *)ptr - 1;
+    size_t *previous_footer = (size_t *)ptr - 1;
     size_t block_size = _get_size(*previous_footer);
     return ptr - (block_size / sizeof(size_t));
 }
@@ -56,37 +63,133 @@ static inline size_t *_start_of_next_block(size_t *ptr, size_t *bottom_heap)
     return ptr + (block_size / sizeof(size_t));
 }
 
-// if newly requested block is smaller than original, then split both blocks, else use the orginal block.
-static inline void _compact_block(size_t *header, size_t block_size, size_t *bottom_heap)
+static inline size_t *_next(size_t *ptr)
+{
+    return (size_t *)*(ptr + NEXT_OFFSET);
+}
+
+static inline size_t *_prev(size_t *ptr)
+{
+    return (size_t *)*(ptr + PREV_OFFSET);
+}
+
+static inline void _set_next(size_t *ptr, size_t *next)
+{
+    *(ptr + NEXT_OFFSET) = (size_t)next;
+}
+
+static inline void _set_prev(size_t *ptr, size_t *prev)
+{
+    *(ptr + PREV_OFFSET) = (size_t)prev;
+}
+
+static void _unlink_from_list(size_t *block)
+{
+    _set_next(_prev(block), _next(block));
+    _set_prev(_next(block), _prev(block));
+}
+
+static inline void _compact_block(size_t *header, size_t block_size)
 {
     size_t original_block = _get_size(*header);
     size_t remaining_size = original_block - block_size;
-    if (remaining_size > 2 * sizeof(size_t))
+    if (remaining_size >= MIN_BLOCK_SIZE)
     {
+        size_t *previous_free_block = _prev(header);
+        size_t *next_free_block = _next(header);
+        size_t *new_free_block = header + (block_size / sizeof(size_t));
         _set(header, _pack(block_size, 1));
-        size_t *next_header = _start_of_next_block(header, bottom_heap);
-        _set(next_header, _pack(remaining_size, 0));
-        return;
+        _set(new_free_block, _pack(remaining_size, 0));
+        _set_next(new_free_block, _next(header));
+        _set_prev(new_free_block, _prev(header));
+        _set_next(previous_free_block, new_free_block);
+        _set_prev(next_free_block, new_free_block);
     }
-    _set(header, _pack(original_block, 1));
+    else
+    {
+        _set(header, _pack(original_block, 1));
+        _unlink_from_list(header);
+    }
+}
+
+static void _init_heap()
+{
+    start_of_heap = sbrk(0);
+    HEAD[1] = (size_t)NULL;
+    HEAD[2] = (size_t)TAIL;
+    TAIL[1] = (size_t)HEAD;
+    TAIL[2] = (size_t)NULL;
 }
 
 static size_t *_first_fit(size_t block_size)
 {
-    size_t *bottom_heap = (size_t *)sbrk(0);
-    if (start_of_heap == 0)
+    if (*(HEAD + NEXT_OFFSET) == 0 && *(TAIL + PREV_OFFSET) == 0)
     {
-        start_of_heap = bottom_heap;
-    }
-    for (size_t *ptr = start_of_heap; ptr < bottom_heap; ptr = _start_of_next_block(ptr, bottom_heap))
-    {
-        if (!_get_alloc(*ptr) && _get_size(*ptr) >= block_size)
+        _init_heap();
+        size_t *new_block = (size_t *)sbrk(block_size);
+        if (new_block == (void *)-1)
         {
-            _compact_block(ptr, block_size, bottom_heap);
+            return NULL;
+        }
+        _set(new_block, _pack(block_size, 1));
+        return new_block;
+    }
+    for (size_t *ptr = _next(HEAD); ptr != TAIL; ptr = _next(ptr))
+    {
+        if (_get_size(*ptr) >= block_size)
+        {
+            _compact_block(ptr, block_size);
             return ptr;
         }
     }
-    return sbrk(block_size);
+    size_t *new_block = (size_t *)sbrk(block_size);
+    if (new_block == (void *)-1)
+    {
+        return NULL;
+    }
+    _set(new_block, _pack(block_size, 1));
+    return new_block;
+}
+
+static void _update_explicit_list(size_t *free_block)
+{
+    if (_next(HEAD) == TAIL)
+    {
+        _set_next(HEAD, free_block);
+        _set_prev(free_block, HEAD);
+        _set_next(free_block, TAIL);
+        _set_prev(TAIL, free_block);
+        return;
+    }
+    size_t *free_ptr = HEAD;
+    while (free_ptr != TAIL)
+    {
+        size_t *next_ptr = _next((size_t *)free_ptr);
+        if (next_ptr > free_block)
+        {
+            _set_next(free_ptr, free_block);
+            _set_prev(free_block, free_ptr);
+            _set_next(free_block, next_ptr);
+            _set_prev(next_ptr, free_block);
+            return;
+        }
+        else if (next_ptr == free_block)
+        {
+            _set_next(free_ptr, next_ptr);
+            _set_prev(next_ptr, free_ptr);
+            return;
+        }
+        else if (next_ptr == TAIL)
+        {
+            _set_next(free_ptr, free_block);
+            _set_prev(TAIL, free_block);
+            _set_next(free_block, TAIL);
+            _set_prev(free_block, free_ptr);
+            return;
+        }
+        free_ptr = next_ptr;
+    }
+    return;
 }
 
 static void _coalesce_block(size_t *ptr)
@@ -96,16 +199,20 @@ static void _coalesce_block(size_t *ptr)
     size_t *previous_block = _start_of_previous_block((size_t *)header);
     size_t *next_block = _start_of_next_block((size_t *)header, bottom_of_heap);
 
-    size_t * start_header = header;
-    size_t  block_size = _get_size(*header);
-    if(previous_block != header && !_get_alloc(*previous_block)){
+    size_t *start_header = header;
+    size_t block_size = _get_size(*header);
+    if (previous_block != header && !_get_alloc(*previous_block))
+    {
         start_header = previous_block;
         block_size += _get_size(*previous_block);
     }
-    if(next_block != bottom_of_heap && !_get_alloc(*next_block)){
+    if (next_block != bottom_of_heap && !_get_alloc(*next_block))
+    {
         block_size += _get_size(*next_block);
+        _unlink_from_list(next_block);
     }
     _set(start_header, _pack(block_size, 0));
+    _update_explicit_list(start_header);
 }
 
 void *ma_malloc(size_t size)
@@ -115,12 +222,12 @@ void *ma_malloc(size_t size)
     {
         return NULL;
     }
+
     size_t *ptr = _first_fit(block_size);
-    if (ptr == (void *)-1)
+    if (ptr == NULL)
     {
         return NULL;
     }
-    _set(ptr, _pack(block_size, 1));
     return (void *)(ptr + 1); // returning start of user space
 }
 
@@ -143,4 +250,54 @@ void *ma_calloc(size_t nmemb, size_t size)
     (void)nmemb;
     (void)size;
     return NULL;
+}
+
+#define MAX_WALK 1000
+
+void ma_print_free_list(void)
+{
+    printf("forward : HEAD");
+    size_t n = 0;
+    for (size_t *p = _next(HEAD); p != TAIL; p = _next(p))
+    {
+        if (p == NULL || ++n > MAX_WALK)
+        {
+            printf(" -> !! broken/cycle");
+            break;
+        }
+        printf(" -> %p[%zu%s]", (void *)p, _get_size(*p), _get_alloc(*p) ? ",A" : "");
+    }
+    printf(" -> TAIL\n");
+
+    printf("backward: TAIL");
+    n = 0;
+    for (size_t *p = _prev(TAIL); p != HEAD; p = _prev(p))
+    {
+        if (p == NULL || ++n > MAX_WALK)
+        {
+            printf(" -> !! broken/cycle");
+            break;
+        }
+        printf(" -> %p[%zu]", (void *)p, _get_size(*p));
+    }
+    printf(" -> HEAD\n");
+}
+
+long ma_free_list_len(void)
+{
+    long forward = 0;
+    for (size_t *p = _next(HEAD); p != TAIL; p = _next(p))
+    {
+        if (p == NULL || ++forward > MAX_WALK || _get_alloc(*p) || _prev(_next(p)) != p)
+            return -1;
+    }
+
+    long backward = 0;
+    for (size_t *p = _prev(TAIL); p != HEAD; p = _prev(p))
+    {
+        if (p == NULL || ++backward > MAX_WALK)
+            return -1;
+    }
+
+    return forward == backward ? forward : -1;
 }
