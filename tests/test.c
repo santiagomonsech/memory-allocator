@@ -2,6 +2,44 @@
 #include <stdio.h>
 #include <assert.h>
 
+static void test_best_fit_picks_smallest(void) {
+
+    alloc_config config = {BEST_FIT};
+    ma_configure_alloctor(&config);
+
+    printf("\n=== test_best_fit_picks_smallest ===\n");
+
+    void *wall = ma_malloc(4096);
+    assert(wall != NULL);
+
+    void *a = ma_malloc(16);
+    assert(a != NULL);
+    void *aux1 = ma_malloc(256);
+    assert(aux1 != NULL);
+    void *b = ma_malloc(96);
+    assert(b != NULL);
+    void *aux2 = ma_malloc(256);
+    assert(aux2 != NULL);
+
+    void *c = ma_malloc(32);
+    assert(c != NULL);
+    void *aux3 = ma_malloc(256);
+    assert(aux3 != NULL);
+    ma_print_free_list();
+
+    ma_free(a);
+    ma_free(b);
+    ma_free(c);
+    ma_print_free_list();
+
+    void *d = ma_malloc(30);
+    assert(d != NULL);
+    assert(d == c && "merge-with-best-fit should reuse address c");
+    printf("[PASS] merge-with-best-fit: d reuses the merged block in  c\n");
+
+    ma_free(d);
+}
+
 static void test_coalesce_next(void) {
     printf("\n=== test_coalesce_next (merge with next block) ===\n");
 
@@ -153,8 +191,11 @@ int main(void) {
     printf("[PASS] ma_malloc(96) is reusing coalesced block\n");
 
     ma_free(p4);
+    ma_print_free_list();
+    
     printf("[PASS] ma_free\n");
 
+    test_best_fit_picks_smallest();
     test_coalesce_next();
     test_coalesce_both();
 

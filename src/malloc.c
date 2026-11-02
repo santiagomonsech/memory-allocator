@@ -16,9 +16,9 @@ size_t *start_of_heap;
 static size_t HEAD[3];
 static size_t TAIL[3];
 
-static alloc_config config = {BEST_FIT};
+static alloc_config config = {FIRST_FIT};
 
-static inline int _configure_alloctor(alloc_config *user_config)
+inline int ma_configure_alloctor(alloc_config *user_config)
 {
     memcpy(&config, user_config, sizeof(config));
     return 0;
@@ -170,7 +170,7 @@ static size_t *_best_fit(size_t block_size)
     {
         return _init_heap(block_size);
     }
-    size_t *best_fit_addr = _next(HEAD);
+    size_t *best_fit_addr = TAIL;
 
     for (size_t *ptr = _next(HEAD); ptr != TAIL; ptr = _next(ptr))
     {
