@@ -16,6 +16,14 @@ size_t *start_of_heap;
 static size_t HEAD[3];
 static size_t TAIL[3];
 
+static alloc_config config = {BEST_FIT};
+
+static inline int _configure_alloctor(alloc_config *user_config)
+{
+    memcpy(&config, user_config, sizeof(config));
+    return 0;
+}
+
 static inline size_t _get_block_size(size_t raw_size)
 {
     size_t raw_block_size = raw_size + 2 * sizeof(size_t);
@@ -112,7 +120,7 @@ static inline void _compact_block(size_t *header, size_t block_size)
     }
 }
 
-static void _init_heap()
+static void _init_heap_pointers()
 {
     start_of_heap = sbrk(0);
     HEAD[1] = (size_t)NULL;
@@ -121,18 +129,23 @@ static void _init_heap()
     TAIL[2] = (size_t)NULL;
 }
 
+static size_t *_init_heap(size_t block_size)
+{
+    _init_heap_pointers();
+    size_t *new_block = (size_t *)sbrk(block_size);
+    if (new_block == (void *)-1)
+    {
+        return NULL;
+    }
+    _set(new_block, _pack(block_size, 1));
+    return new_block;
+}
+
 static size_t *_first_fit(size_t block_size)
 {
     if (*(HEAD + NEXT_OFFSET) == 0 && *(TAIL + PREV_OFFSET) == 0)
     {
-        _init_heap();
-        size_t *new_block = (size_t *)sbrk(block_size);
-        if (new_block == (void *)-1)
-        {
-            return NULL;
-        }
-        _set(new_block, _pack(block_size, 1));
-        return new_block;
+        return _init_heap(block_size);
     }
     for (size_t *ptr = _next(HEAD); ptr != TAIL; ptr = _next(ptr))
     {
@@ -141,6 +154,37 @@ static size_t *_first_fit(size_t block_size)
             _compact_block(ptr, block_size);
             return ptr;
         }
+    }
+    size_t *new_block = (size_t *)sbrk(block_size);
+    if (new_block == (void *)-1)
+    {
+        return NULL;
+    }
+    _set(new_block, _pack(block_size, 1));
+    return new_block;
+}
+
+static size_t *_best_fit(size_t block_size)
+{
+    if (_next(HEAD) == 0 && _prev(TAIL) == 0)
+    {
+        return _init_heap(block_size);
+    }
+    size_t *best_fit_addr = _next(HEAD);
+
+    for (size_t *ptr = _next(HEAD); ptr != TAIL; ptr = _next(ptr))
+    {
+        size_t current_block_size = _get_size(*ptr);
+        size_t best_fit_size = _get_size(*best_fit_addr);
+        if (current_block_size >= block_size && (current_block_size <= best_fit_size || best_fit_size < block_size))
+        {
+            best_fit_addr = ptr;
+        }
+    }
+    if (best_fit_addr != TAIL && _get_size(*best_fit_addr) >= block_size)
+    {
+        _compact_block(best_fit_addr, block_size);
+        return best_fit_addr;
     }
     size_t *new_block = (size_t *)sbrk(block_size);
     if (new_block == (void *)-1)
@@ -223,7 +267,18 @@ void *ma_malloc(size_t size)
         return NULL;
     }
 
-    size_t *ptr = _first_fit(block_size);
+    size_t *ptr;
+    switch (config.fit_strategy)
+    {
+    case FIRST_FIT:
+        ptr = _first_fit(block_size);
+        break;
+    case BEST_FIT:
+        ptr = _best_fit(block_size);
+        break;
+    default:
+        return NULL;
+    }
     if (ptr == NULL)
     {
         return NULL;

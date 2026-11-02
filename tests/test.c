@@ -13,6 +13,7 @@ static void test_coalesce_next(void) {
     void *b = ma_malloc(150);
     assert(b != NULL);
 
+
     ma_free(b);
     ma_free(a);
 
@@ -62,8 +63,11 @@ static void test_list_first_block(void) {
     long before = ma_free_list_len();
     assert(before >= 0);
 
+
     ma_free(c);
+
     ma_free(b);
+
 
     assert(ma_free_list_len() == before + 1 && "first block: c must leave the list");
     printf("[PASS] first block: one node, consistent both ways\n");
@@ -139,7 +143,11 @@ int main(void) {
     ma_free(p3);
     printf("[PASS] ma_free\n");
 
+
+
     void *p4 = ma_malloc(96);
+
+
     assert(p4 != NULL && "first fit allocation should succeed");
     assert(p4 == p1 && "first fit allocation should reuse coalesced block");
     printf("[PASS] ma_malloc(96) is reusing coalesced block\n");
