@@ -2,6 +2,48 @@
 #include <stdio.h>
 #include <assert.h>
 
+static void test_best_fit_picks_smallest(void) {
+
+    alloc_config config = {BEST_FIT};
+    int conf = ma_configure_allocator(&config);
+    assert(conf == 0 && "Invalid configuration must be rejected");
+
+    printf("\n=== test_best_fit_picks_smallest ===\n");
+
+    void *wall = ma_malloc(4096);
+    assert(wall != NULL);
+
+    void *a = ma_malloc(16);
+    assert(a != NULL);
+    void *aux1 = ma_malloc(256);
+    assert(aux1 != NULL);
+    void *b = ma_malloc(96);
+    assert(b != NULL);
+    void *aux2 = ma_malloc(256);
+    assert(aux2 != NULL);
+
+    void *c = ma_malloc(32);
+    assert(c != NULL);
+    void *aux3 = ma_malloc(256);
+    assert(aux3 != NULL);
+    ma_print_free_list();
+
+    ma_free(a);
+    ma_free(b);
+    ma_free(c);
+    ma_print_free_list();
+
+    void *d = ma_malloc(30);
+    assert(d != NULL);
+    assert(d == c && "merge-with-best-fit should reuse address c");
+    printf("[PASS] merge-with-best-fit: d reuses the merged block in  c\n");
+
+    ma_free(d);
+    config.fit_strategy = FIRST_FIT;
+    conf = ma_configure_allocator(&config);
+    assert(conf == 0 && "Invalid configuration must be rejected");
+}
+
 static void test_coalesce_next(void) {
     printf("\n=== test_coalesce_next (merge with next block) ===\n");
 
@@ -12,6 +54,7 @@ static void test_coalesce_next(void) {
     assert(a != NULL);
     void *b = ma_malloc(150);
     assert(b != NULL);
+
 
     ma_free(b);
     ma_free(a);
@@ -62,8 +105,11 @@ static void test_list_first_block(void) {
     long before = ma_free_list_len();
     assert(before >= 0);
 
+
     ma_free(c);
+
     ma_free(b);
+
 
     assert(ma_free_list_len() == before + 1 && "first block: c must leave the list");
     printf("[PASS] first block: one node, consistent both ways\n");
@@ -73,41 +119,7 @@ static void test_list_first_block(void) {
     assert(ma_free_list_len() == before);
 }
 
-static void test_list_case(const char *name, size_t size, int free_a, int free_c) {
-    printf("\n=== test_list_case: %s ===\n", name);
-
-    void *wall = ma_malloc(size);
-    assert(wall != NULL);
-    void *a = ma_malloc(size);
-    assert(a != NULL);
-    void *b = ma_malloc(size);
-    assert(b != NULL);
-    void *c = ma_malloc(size);
-    assert(c != NULL);
-    void *wall2 = ma_malloc(size);
-    assert(wall2 != NULL);
-
-    // guard: the case only means something if a, b, c are neighbors in the heap
-    assert((char *)b - (char *)a > 0 && (char *)b - (char *)a == (char *)c - (char *)b);
-
-    long before = ma_free_list_len();
-    assert(before >= 0);
-
-    if (free_a)
-        ma_free(a);
-    if (free_c)
-        ma_free(c);
-    ma_free(b);
-
-    assert(ma_free_list_len() == before + 1 && "coalescing must leave exactly one new node");
-    printf("[PASS] %s: one node, consistent both ways\n", name);
-}
-
-int main(void) {
-    test_list_first_block();
-
-    printf("=== ma_malloc tests ===\n");
-
+static void test_basic_allocation(void){
     void *p = ma_malloc(64);
     assert(p != NULL && "basic allocation should succeed");
     printf("[PASS] ma_malloc(64)\n");
@@ -140,13 +152,64 @@ int main(void) {
     printf("[PASS] ma_free\n");
 
     void *p4 = ma_malloc(96);
+
     assert(p4 != NULL && "first fit allocation should succeed");
     assert(p4 == p1 && "first fit allocation should reuse coalesced block");
     printf("[PASS] ma_malloc(96) is reusing coalesced block\n");
 
     ma_free(p4);
     printf("[PASS] ma_free\n");
+}
 
+static void test_list_case(const char *name, size_t size, int free_a, int free_c) {
+    printf("\n=== test_list_case: %s ===\n", name);
+
+    void *wall = ma_malloc(size);
+    assert(wall != NULL);
+    void *a = ma_malloc(size);
+    assert(a != NULL);
+    void *b = ma_malloc(size);
+    assert(b != NULL);
+    void *c = ma_malloc(size);
+    assert(c != NULL);
+    void *wall2 = ma_malloc(size);
+    assert(wall2 != NULL);
+
+    // guard: the case only means something if a, b, c are neighbors in the heap
+    assert((char *)b - (char *)a > 0 && (char *)b - (char *)a == (char *)c - (char *)b);
+
+    long before = ma_free_list_len();
+    assert(before >= 0);
+
+    if (free_a)
+        ma_free(a);
+    if (free_c)
+        ma_free(c);
+    ma_free(b);
+
+    assert(ma_free_list_len() == before + 1 && "coalescing must leave exactly one new node");
+    printf("[PASS] %s: one node, consistent both ways\n", name);
+}
+
+static void test_invalid_configuration(void){
+    alloc_config config = {3};
+    int conf = ma_configure_allocator(&config);
+    assert(conf == -1 && "Invalid configuration must be rejected");
+
+    conf = ma_configure_allocator(NULL);
+    assert(conf == -1 && "Invalid configuration must be rejected");
+}
+
+int main(void) {
+    test_invalid_configuration();
+    test_list_first_block();
+
+    printf("=== ma_malloc tests ===\n");
+
+    test_basic_allocation();
+    void *pWall = ma_malloc(96);
+
+    test_best_fit_picks_smallest();
     test_coalesce_next();
     test_coalesce_both();
 
@@ -155,6 +218,7 @@ int main(void) {
     test_list_case("A alloc, C free", 65536, 0, 1);
     test_list_case("A free, C free", 262144, 1, 1);
 
+    ma_free(pWall);
     printf("\nAll tests passed!\n");
     return 0;
 }

@@ -7,6 +7,11 @@
 
 ---
 
+  ## [0.4.0] - 2026-11-24
+  ## Added
+  - User configuration for fit strategy (first fit vs best fit at this time).
+  - Best-fit strategy for allocating a new block.
+
   ## [0.3.0] - 2026-10-14
   ### Added
   - (explicit free list: sentinels, prev/next in the payload, minimum block size)
