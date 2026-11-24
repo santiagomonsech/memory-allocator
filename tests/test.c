@@ -38,6 +38,8 @@ static void test_best_fit_picks_smallest(void) {
     printf("[PASS] merge-with-best-fit: d reuses the merged block in  c\n");
 
     ma_free(d);
+    config.fit_strategy = FIRST_FIT;
+    ma_configure_alloctor(&config);
 }
 
 static void test_coalesce_next(void) {
@@ -185,7 +187,6 @@ int main(void) {
 
     void *p4 = ma_malloc(96);
 
-
     assert(p4 != NULL && "first fit allocation should succeed");
     assert(p4 == p1 && "first fit allocation should reuse coalesced block");
     printf("[PASS] ma_malloc(96) is reusing coalesced block\n");
@@ -194,6 +195,9 @@ int main(void) {
     ma_print_free_list();
     
     printf("[PASS] ma_free\n");
+
+    void *pWall = ma_malloc(96);
+    ma_print_free_list();
 
     test_best_fit_picks_smallest();
     test_coalesce_next();
@@ -204,6 +208,7 @@ int main(void) {
     test_list_case("A alloc, C free", 65536, 0, 1);
     test_list_case("A free, C free", 262144, 1, 1);
 
+    ma_free(pWall);
     printf("\nAll tests passed!\n");
     return 0;
 }
