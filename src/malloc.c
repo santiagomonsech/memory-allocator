@@ -18,8 +18,14 @@ static size_t TAIL[3];
 
 static alloc_config config = {FIRST_FIT};
 
-inline int ma_configure_alloctor(alloc_config *user_config)
+inline int ma_configure_allocator(alloc_config *user_config)
 {
+    if(user_config == NULL){
+        return -1;
+    }
+    if(user_config->fit_strategy != FIRST_FIT && user_config->fit_strategy != BEST_FIT){
+        return -1;
+    }
     memcpy(&config, user_config, sizeof(config));
     return 0;
 }

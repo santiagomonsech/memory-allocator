@@ -102,13 +102,13 @@ Because when trying to get the start of the previous block, from the start of th
 This is to prevent CPU performance penalties and satisfy the hardware constraints of 64-bit systems. By ensuring every free memory chunk begins at an address divisible by 8, a custom malloc or free implementation guarantees that any primitive data type stored there can be accessed efficiently.
 
 **Why first-fit instead of best-fit?**
-Mainly simplicity of implementation, first-fit stops searching as soon as it finds a candidate block, while best-fit needs to traverse the entire free list to guarantee the tightest fit. Per CS:APP 9.9.6, first-fit tends to have throughput comparable to best-fit in practice, despite best-fit giving better worst-case external fragmentation guarantees. I haven't measured that trade-off for this allocator yet, that's exactly what M5 (benchmark vs libc malloc, throughput + fragmentation) is for, instead of assuming it.
+Mainly simplicity of implementation, first-fit stops searching as soon as it finds a candidate block, while best-fit needs to traverse the entire free list to guarantee the tightest fit. Per CS:APP 9.9.6, first-fit tends to have throughput comparable to best-fit in practice, despite best-fit giving better worst-case external fragmentation guarantees. I haven't measured that trade-off for this allocator yet, that's exactly what M6 including benchmark vs libc malloc, throughput + fragmentation.
 
 **Why static sentinels (`HEAD`/`TAIL`) instead of `NULL`-terminated pointers?**
 `HEAD` and `TAIL` live outside the `sbrk`-managed heap (static globals), so they never take part in physical coalescing and don't need a real header/footer, but every real free block still expects to read a `prev`/`next` at the same fixed offsets. Giving the sentinels the same shape as a real block (padding out the header slot they don't use) means the insertion/removal code never has to special case "is this a sentinel or a real block?"one code path handles both.
 
 **Why address ordered free list instead of LIFO**
-An arbitrary choice, but i'm aware that LIFO is O(1) vs address-ordered which is O(N). The benefit, per CS:APP 9.9.13, is better memory utilization: first-fit on an address-ordered list approaches best-fit. M5 will implement LIFO and measure both.
+An arbitrary choice, but i'm aware that LIFO is O(1) vs address-ordered which is O(N). The benefit, per CS:APP 9.9.13, is better memory utilization: first-fit on an address-ordered list approaches best-fit. M6 will implement LIFO and measure both.
 
 ---
 
@@ -120,7 +120,8 @@ An arbitrary choice, but i'm aware that LIFO is O(1) vs address-ordered which is
 | M2 | Coalescing (all 4 cases) · first-fit search · block splitting | ✅ Done |
 | M3 | Explicit free list — prev/next pointers in payload | ✅ Done |
 | M4 | Segregated free lists — multiple lists by size class | ⬜ Planned |
-| M5 | Benchmark vs libc malloc — throughput + fragmentation | ⬜ Planned |
+| M5 | Best fit strategy and more extensive testing | ✅ Done |
+| M6 | LIFO, Benchmark vs libc malloc — throughput + fragmentation | ⬜ Planned |
 
 ---
 

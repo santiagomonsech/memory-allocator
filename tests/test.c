@@ -5,7 +5,8 @@
 static void test_best_fit_picks_smallest(void) {
 
     alloc_config config = {BEST_FIT};
-    ma_configure_alloctor(&config);
+    int conf = ma_configure_allocator(&config);
+    assert(conf == 0 && "Invalid configuration must be rejected");
 
     printf("\n=== test_best_fit_picks_smallest ===\n");
 
@@ -39,7 +40,8 @@ static void test_best_fit_picks_smallest(void) {
 
     ma_free(d);
     config.fit_strategy = FIRST_FIT;
-    ma_configure_alloctor(&config);
+    conf = ma_configure_allocator(&config);
+    assert(conf == 0 && "Invalid configuration must be rejected");
 }
 
 static void test_coalesce_next(void) {
@@ -117,41 +119,7 @@ static void test_list_first_block(void) {
     assert(ma_free_list_len() == before);
 }
 
-static void test_list_case(const char *name, size_t size, int free_a, int free_c) {
-    printf("\n=== test_list_case: %s ===\n", name);
-
-    void *wall = ma_malloc(size);
-    assert(wall != NULL);
-    void *a = ma_malloc(size);
-    assert(a != NULL);
-    void *b = ma_malloc(size);
-    assert(b != NULL);
-    void *c = ma_malloc(size);
-    assert(c != NULL);
-    void *wall2 = ma_malloc(size);
-    assert(wall2 != NULL);
-
-    // guard: the case only means something if a, b, c are neighbors in the heap
-    assert((char *)b - (char *)a > 0 && (char *)b - (char *)a == (char *)c - (char *)b);
-
-    long before = ma_free_list_len();
-    assert(before >= 0);
-
-    if (free_a)
-        ma_free(a);
-    if (free_c)
-        ma_free(c);
-    ma_free(b);
-
-    assert(ma_free_list_len() == before + 1 && "coalescing must leave exactly one new node");
-    printf("[PASS] %s: one node, consistent both ways\n", name);
-}
-
-int main(void) {
-    test_list_first_block();
-
-    printf("=== ma_malloc tests ===\n");
-
+static void test_basic_allocation(void){
     void *p = ma_malloc(64);
     assert(p != NULL && "basic allocation should succeed");
     printf("[PASS] ma_malloc(64)\n");
@@ -183,8 +151,6 @@ int main(void) {
     ma_free(p3);
     printf("[PASS] ma_free\n");
 
-
-
     void *p4 = ma_malloc(96);
 
     assert(p4 != NULL && "first fit allocation should succeed");
@@ -192,12 +158,56 @@ int main(void) {
     printf("[PASS] ma_malloc(96) is reusing coalesced block\n");
 
     ma_free(p4);
-    ma_print_free_list();
-    
     printf("[PASS] ma_free\n");
+}
 
+static void test_list_case(const char *name, size_t size, int free_a, int free_c) {
+    printf("\n=== test_list_case: %s ===\n", name);
+
+    void *wall = ma_malloc(size);
+    assert(wall != NULL);
+    void *a = ma_malloc(size);
+    assert(a != NULL);
+    void *b = ma_malloc(size);
+    assert(b != NULL);
+    void *c = ma_malloc(size);
+    assert(c != NULL);
+    void *wall2 = ma_malloc(size);
+    assert(wall2 != NULL);
+
+    // guard: the case only means something if a, b, c are neighbors in the heap
+    assert((char *)b - (char *)a > 0 && (char *)b - (char *)a == (char *)c - (char *)b);
+
+    long before = ma_free_list_len();
+    assert(before >= 0);
+
+    if (free_a)
+        ma_free(a);
+    if (free_c)
+        ma_free(c);
+    ma_free(b);
+
+    assert(ma_free_list_len() == before + 1 && "coalescing must leave exactly one new node");
+    printf("[PASS] %s: one node, consistent both ways\n", name);
+}
+
+static void test_invalid_configuration(void){
+    alloc_config config = {3};
+    int conf = ma_configure_allocator(&config);
+    assert(conf == -1 && "Invalid configuration must be rejected");
+
+    conf = ma_configure_allocator(NULL);
+    assert(conf == -1 && "Invalid configuration must be rejected");
+}
+
+int main(void) {
+    test_invalid_configuration();
+    test_list_first_block();
+
+    printf("=== ma_malloc tests ===\n");
+
+    test_basic_allocation();
     void *pWall = ma_malloc(96);
-    ma_print_free_list();
 
     test_best_fit_picks_smallest();
     test_coalesce_next();
